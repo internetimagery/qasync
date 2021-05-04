@@ -1,5 +1,7 @@
 # qasync
 
+> NOTE: This branch is an alteration to support python 2 briefly.
+
 [![Maintenance](https://img.shields.io/maintenance/yes/2021)](https://pypi.org/project/qasync)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/qasync)](https://pypi.org/project/qasync)
 [![PyPI - License](https://img.shields.io/pypi/l/qasync)](/LICENSE)
@@ -20,7 +22,7 @@
 
 ## Requirements
 
-`qasync` requires Python >= 3.6, and PyQt5 or PySide2.
+This branch of `qasync` requires Python 2.7, Six, Some PyQt/PySide, Qt (shim)
 
 ## Installation
 
