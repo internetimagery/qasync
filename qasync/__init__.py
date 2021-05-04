@@ -19,7 +19,7 @@ __url__ = "https://github.com/CabbageDevelopment/qasync"
 __license__ = "BSD"
 __all__ = ["QEventLoop", "QThreadExecutor", "asyncSlot", "asyncClose"]
 
-import asyncio
+import trollius as asyncio
 import contextlib
 import functools
 import importlib
@@ -31,85 +31,11 @@ import time
 from concurrent.futures import Future
 from queue import Queue
 
-logger = logging.getLogger(__name__)
-
-QtModule = None
-
-# If QT_API env variable is given, use that or fail trying
-qtapi_env = os.getenv("QT_API", "").strip().lower()
-if qtapi_env:
-    env_to_mod_map = {
-        "pyqt5": "PyQt5",
-        "pyqt6": "PyQt6",
-        "pyqt": "PyQt4",
-        "pyqt4": "PyQt4",
-        "pyside6": "PySide6",
-        "pyside2": "PySide2",
-        "pyside": "PySide",
-    }
-    if qtapi_env in env_to_mod_map:
-        QtModuleName = env_to_mod_map[qtapi_env]
-    else:
-        raise ImportError(
-            "QT_API environment variable set ({}) but not one of [{}].".format(
-                qtapi_env, ", ".join(env_to_mod_map.keys())
-            )
-        )
-
-    logger.info("Forcing use of {} as Qt Implementation".format(QtModuleName))
-    QtModule = importlib.import_module(QtModuleName)
-
-# If a Qt lib is already imported, use that
-if not QtModule:
-    for QtModuleName in ("PyQt5", "PyQt6", "PySide2", "PySide6"):
-        if QtModuleName in sys.modules:
-            QtModule = sys.modules[QtModuleName]
-            break
-
-# Try importing qt libs
-if not QtModule:
-    for QtModuleName in ("PyQt5", "PyQt6", "PySide2", "PySide6"):
-        try:
-            QtModule = importlib.import_module(QtModuleName)
-        except ImportError:
-            continue
-        else:
-            break
-
-if not QtModule:
-    raise ImportError("No Qt implementations found")
-
-logger.info("Using Qt Implementation: {}".format(QtModuleName))
-
-QtCore = importlib.import_module(QtModuleName + ".QtCore", package=QtModuleName)
-QtGui = importlib.import_module(QtModuleName + ".QtGui", package=QtModuleName)
-
-if QtModuleName == "PyQt5":
-    from PyQt5 import QtWidgets
-    from PyQt5.QtCore import pyqtSlot as Slot
-
-    QApplication = QtWidgets.QApplication
-
-elif QtModuleName == "PyQt6":
-    from PyQt6 import QtWidgets
-    from PyQt6.QtCore import pyqtSlot as Slot
-
-    QApplication = QtWidgets.QApplication
-
-elif QtModuleName == "PySide2":
-    from PySide2 import QtWidgets
-    from PySide2.QtCore import Slot
-
-    QApplication = QtWidgets.QApplication
-
-elif QtModuleName == "PySide6":
-    from PySide6 import QtWidgets
-    from PySide6.QtCore import Slot
-
-    QApplication = QtWidgets.QApplication
+from Qt import QtCore, QtWidgets
 
 from ._common import with_logger  # noqa
 
+logger = logging.getLogger(__name__)
 
 @with_logger
 class _QThreadWorker(QtCore.QThread):
@@ -123,7 +49,7 @@ class _QThreadWorker(QtCore.QThread):
         self.__queue = queue
         self.__stop = False
         self.__num = num
-        super().__init__()
+        super(_QThreadWorker, self).__init__()
         if stackSize is not None:
             self.setStackSize(stackSize)
 
@@ -160,11 +86,11 @@ class _QThreadWorker(QtCore.QThread):
 
     def wait(self):
         self._logger.debug("Waiting for thread #%s to stop...", self.__num)
-        super().wait()
+        super(_QThreadWorker, self).wait()
 
 
 @with_logger
-class QThreadExecutor:
+class QThreadExecutor(object):
     """
     ThreadExecutor that produces QThreads.
 
@@ -178,7 +104,7 @@ class QThreadExecutor:
     """
 
     def __init__(self, max_workers=10, stack_size=None):
-        super().__init__()
+        super(QThreadExecutor, self).__init__()
         self.__max_workers = max_workers
         self.__queue = Queue()
         if stack_size is None:
@@ -250,7 +176,7 @@ def _make_signaller(qtimpl_qtcore, *args):
 @with_logger
 class _SimpleTimer(QtCore.QObject):
     def __init__(self):
-        super().__init__()
+        super(_SimpleTimer, self).__init__()
         self.__callbacks = {}
         self._stopped = False
         self.__debug_enabled = False
@@ -308,7 +234,7 @@ def _fileno(fd):
 
 
 @with_logger
-class _QEventLoop:
+class _QEventLoop(object):
     """
     Implementation of asyncio event loop that uses the Qt Event loop.
 
@@ -332,7 +258,7 @@ class _QEventLoop:
     """
 
     def __init__(self, app=None, set_running_loop=True, already_running=False):
-        self.__app = app or QApplication.instance()
+        self.__app = app or QtWidgets.QApplication.instance()
         assert self.__app is not None, "No QApplication has been instantiated"
         self.__is_running = False
         self.__debug_enabled = False
@@ -347,10 +273,13 @@ class _QEventLoop:
         signaller.signal.connect(lambda callback, args: self.call_soon(callback, *args))
 
         assert self.__app is not None
-        super().__init__()
+        super(_QEventLoop, self).__init__()
 
         if set_running_loop:
-            asyncio.events._set_running_loop(self)
+            try:
+                asyncio.events._set_running_loop(self)
+            except AttributeError:
+                asyncio.set_event_loop(self)
 
         # We have to set __is_running to True after calling
         # super().__init__() because of a bug in BaseEventLoop.
@@ -438,7 +367,7 @@ class _QEventLoop:
         if self.__default_executor is not None:
             self.__default_executor.shutdown()
 
-        super().close()
+        super(_QEventLoop, self).close()
 
         self._timer.stop()
         self.__app = None
@@ -714,7 +643,7 @@ class _QEventLoop:
         return self.__debug_enabled
 
     def set_debug(self, enabled):
-        super().set_debug(enabled)
+        super(_QEventLoop, self).set_debug(enabled)
         self.__debug_enabled = enabled
         self._timer.set_debug(enabled)
 
@@ -751,7 +680,7 @@ else:
     QEventLoop = QSelectorEventLoop
 
 
-class _Cancellable:
+class _Cancellable(object):
     def __init__(self, timer, loop):
         self.__timer = timer
         self.__loop = loop
@@ -767,7 +696,7 @@ def asyncClose(fn):
     def wrapper(*args, **kwargs):
         f = asyncio.ensure_future(fn(*args, **kwargs))
         while not f.done():
-            QApplication.instance().processEvents()
+            QtWidgets.QApplication.instance().processEvents()
 
     return wrapper
 
@@ -782,7 +711,7 @@ def asyncSlot(*args, **kwargs):
             sys.excepthook(*sys.exc_info())
 
     def outer_decorator(fn):
-        @Slot(*args, **kwargs)
+        @QtCore.Slot(*args, **kwargs)
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             task = asyncio.ensure_future(fn(*args, **kwargs))
@@ -794,9 +723,9 @@ def asyncSlot(*args, **kwargs):
     return outer_decorator
 
 
-class QEventLoopPolicyMixin:
+class QEventLoopPolicyMixin(object):
     def new_event_loop(self):
-        return QEventLoop(QApplication.instance() or QApplication(sys.argv))
+        return QEventLoop(QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv))
 
 
 class DefaultQEventLoopPolicy(

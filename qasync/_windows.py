@@ -1,23 +1,24 @@
-# © 2018 Gerard Marull-Paretas <gerard@teslabs.com>
-# © 2014 Mark Harviston <mark.harviston@gmail.com>
-# © 2014 Arve Knudsen <arve.knudsen@gmail.com>
+# (c) 2018 Gerard Marull-Paretas <gerard@teslabs.com>
+# (c) 2014 Mark Harviston <mark.harviston@gmail.com>
+# (c) 2014 Arve Knudsen <arve.knudsen@gmail.com>
 # BSD License
 
 """Windows specific Quamash functionality."""
 
-import asyncio
+import trollius as asyncio
 import sys
 
 try:
     import _winapi
-    from asyncio import windows_events
+    from trollius import windows_events
     import _overlapped
 except ImportError:  # noqa
     pass  # w/o guarding this import py.test can't gather doctests on platforms w/o _winapi
 
 import math
 
-from . import QtCore, _make_signaller
+from Qt import QtCore
+from . import _make_signaller
 from ._common import with_logger
 
 UINT32_MAX = 0xffffffff
@@ -28,7 +29,7 @@ class _ProactorEventLoop(asyncio.ProactorEventLoop):
     """Proactor based event loop."""
 
     def __init__(self):
-        super().__init__(_IocpProactor())
+        super(_ProactorEventLoop, self).__init__(_IocpProactor())
 
         self.__event_signaller = _make_signaller(QtCore, list)
         self.__event_signal = self.__event_signaller.signal
@@ -139,7 +140,7 @@ class _IocpProactor(windows_events.IocpProactor):
 @with_logger
 class _EventWorker(QtCore.QThread):
     def __init__(self, proactor, parent):
-        super().__init__()
+        super(_EventWorker, self).__init__()
 
         self.__stop = False
         self.__proactor = proactor
@@ -147,7 +148,7 @@ class _EventWorker(QtCore.QThread):
         self.__semaphore = QtCore.QSemaphore()
 
     def start(self):
-        super().start()
+        super(_EventWorker, self).start()
         self.__semaphore.acquire()
 
     def stop(self):

@@ -1,15 +1,17 @@
-# © 2018 Gerard Marull-Paretas <gerard@teslabs.com>
-# © 2014 Mark Harviston <mark.harviston@gmail.com>
-# © 2014 Arve Knudsen <arve.knudsen@gmail.com>
+# (c) 2018 Gerard Marull-Paretas <gerard@teslabs.com>
+# (c) 2014 Mark Harviston <mark.harviston@gmail.com>
+# (c) 2014 Arve Knudsen <arve.knudsen@gmail.com>
 # BSD License
 
 """UNIX specific Quamash functionality."""
 
-import asyncio
+import trollius as asyncio
 import selectors
 import collections
+from six.moves.collections.abc import Mapping
 
-from . import QtCore, with_logger, _fileno
+from Qt import QtCore
+from . import with_logger, _fileno
 
 
 EVENT_READ = (1 << 0)
@@ -17,7 +19,6 @@ EVENT_WRITE = (1 << 1)
 
 
 class _SelectorMapping(collections.abc.Mapping):
-
     """Mapping of file objects to selector keys."""
 
     def __init__(self, selector):
